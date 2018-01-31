@@ -1,0 +1,45 @@
+This is a tutorial for making a Haskell module available for Java via the JNI
+
+Perhaps you have a module Fibonacci where you have a function fibonacci n that you want to call in Java
+
+First you compile the Haskell Module with the exported functions: ghc -c -O Fibonacci.hs
+
+Then you write you Java Class which uses the functions of the Haskell Module:
+public class HelloHaskell {
+	static {
+		System.loadLibrary("fibonacci"); //no .dll !!!
+	}
+	private native static int fibonacci(int n);
+	
+	public static void main(String[] args) {
+		System.out.println(fibonacci(42));
+	}
+}
+Now Compile the Java class: javac HelloHaskell.java
+You have to generate a Bridge.h file by "javac -h $HelloHaskell"
+Then you implement the functions declared in Bridge.h in the file Bridge.c: 
+
+#include <HsFFI.h> //hs_init, hs_add_root and hs_exit
+#ifdef __GLASGOW_HASKELL__
+#include "Fibonacci_stub.h" //include 
+#include <jni.h>
+extern void __stginit_Safe(void);
+#endif
+#include <stdio.h>
+
+JNIEXPORT jint JNICALL Java_HelloHaskell_fibonacci(JNIEnv * env, jclass c, jint n)
+{
+	int argc;
+	char*** argv;
+	argc = 0;
+    hs_init(&argc, argv);
+#ifdef __GLASGOW_HASKELL__
+    hs_add_root(__stginit_Safe);
+#endif
+	int i;
+    i = fibonacci_hs(n);
+    hs_exit();
+    return i;
+}
+Now you make the fibonacci.dll by invoking ghc and compiling the Bridge.c file 
+ghc -I"%JAVA_HOME%\include" -I"%JAVA_HOME%\include\win32" -shared -o fibonacci.dll --make -no-hs-main -optc -O Bridge.c Fibonacci.o
